@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
+<title>Ad Spend Journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Layout: one narrow column of four steps (range, paste, check, export). Tool page, no hero. */
+  :root {
+    --bg: #f2f5f4;
+    --surface: #ffffff;
+    --ink: #16211f;
+    --muted: #586863;
+    --line: #d8dfdd;
+    --field: #f7f9f8;
+    --accent: #0b6b5c;
+    --accent-ink: #ffffff;
+    --bad: #b3261e;
+    --bad-bg: #fbe9e7;
+    --warn: #7a4f00;
+    --warn-bg: #fff3d6;
+    --good: #17703f;
+    --good-bg: #e2f3e8;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1513; --surface: #151f1c; --ink: #e5eeeb; --muted: #94a69f; --line: #283733;
+      --field: #101816; --accent: #4fc3ad; --accent-ink: #06211b;
+      --bad: #ff9088; --bad-bg: #3a1d1b; --warn: #f0c56a; --warn-bg: #33290f;
+      --good: #72dba2; --good-bg: #12301f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1513; --surface: #151f1c; --ink: #e5eeeb; --muted: #94a69f; --line: #283733;
+    --field: #101816; --accent: #4fc3ad; --accent-ink: #06211b;
+    --bad: #ff9088; --bad-bg: #3a1d1b; --warn: #f0c56a; --warn-bg: #33290f;
+    --good: #72dba2; --good-bg: #12301f;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    padding-inline: 16px; padding-block: 28px 56px;
+  }
+  .wrap { max-width: 800px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { margin: 2px 0 0; color: var(--muted); }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .step { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-right: 8px; }
+  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+
+  .dates { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; font-weight: 500; color: var(--muted); }
+  input[type="date"] { font: inherit; font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-height: 40px; }
+  .range-note { font-size: 13px; color: var(--muted); padding-bottom: 9px; }
+  .range-note strong { color: var(--ink); font-weight: 600; }
+
+  .pastebox { display: flex; align-items: flex-start; gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--field); overflow: hidden; }
+  .rowlabels { flex: none; width: 92px; padding-top: 10px; border-right: 1px solid var(--line); background: var(--surface); }
+  .rowlabels span { display: block; height: 24px; line-height: 24px; padding-inline: 10px; font-size: 13px; font-weight: 500; }
+  textarea { flex: 1; min-width: 0; height: 164px; resize: vertical; border: 0; border-radius: 0; font-family: var(--mono); font-size: 13px; line-height: 24px; color: var(--ink); background: transparent; padding: 10px 12px; white-space: pre; overflow: auto; }
+  textarea:focus-visible { outline-offset: -2px; }
+  textarea::placeholder { color: var(--muted); opacity: .8; }
+  .count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  button { font: inherit; cursor: pointer; }
+  .btn { font-weight: 600; padding: 10px 16px; min-height: 40px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .recheck { display: flex; align-items: center; gap: 10px; }
+  .when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .btn.small { padding: 6px 12px; min-height: 34px; font-size: 13px; }
+  .btn.alt { background: transparent; color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .links { display: flex; gap: 14px; }
+  .link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font-size: 13px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .banner { border-radius: 8px; padding: 10px 12px; font-weight: 500; }
+  .banner.good { background: var(--good-bg); color: var(--good); }
+  .banner.bad { background: var(--bad-bg); color: var(--bad); }
+  .banner.idle { background: var(--field); color: var(--muted); font-weight: 400; }
+  .issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .issue { border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 10px 12px; }
+  .issue.error { border-left-color: var(--bad); }
+  .issue.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .issue b { display: block; font-weight: 600; }
+  .issue .why { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .issue.warn .why { color: var(--warn); }
+  .issue .fix { margin-top: 4px; font-size: 13px; }
+  .issue .fix em { font-style: normal; font-weight: 600; color: var(--accent); }
+
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th { text-align: right; font-weight: 500; font-size: 12px; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+  th.bad { color: var(--bad); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--mono); white-space: nowrap; }
+  td:first-child { font-family: var(--sans); }
+  tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--line); }
+  td.bad { background: var(--bad-bg); color: var(--bad); font-weight: 500; }
+  tr.extra td:first-child { color: var(--bad); }
+  td.desc { font-family: var(--sans); text-align: left; }
+
+  .exports { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .panel { border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--field); }
+  .panel h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status { min-height: 20px; margin: 0; font-size: 13px; color: var(--muted); }
+  details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  details summary { cursor: pointer; padding: 8px 10px; font-size: 13px; font-weight: 500; }
+  details .scroll { padding: 0 10px 10px; }
+  .jrn { display: flex; flex-direction: column; gap: 8px; }
+  .jnote { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+
+  @media (max-width: 480px) {
+    body { padding-block-start: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Ad Spend Journal</h1>
+    <p class="sub">Pick the dates, paste the numbers from your Google Sheet, then export.</p>
+  </header>
+
+  <section class="card" aria-labelledby="h-range">
+    <div class="head"><h2 id="h-range"><span class="step">1</span>Date range</h2></div>
+    <div class="dates">
+      <div class="field"><label for="start">From</label><input type="date" id="start"></div>
+      <div class="field"><label for="end">To</label><input type="date" id="end"></div>
+      <div class="range-note" id="rangeNote"></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-paste">
+    <div class="head">
+      <h2 id="h-paste"><span class="step">2</span>Paste spend</h2>
+      <button class="link" id="clear" type="button">Clear</button>
+    </div>
+    <p class="hint">Paste six rows, one column per date, values only. The rows must be in the order shown on the left. Leave out the row names and the date row.</p>
+    <label for="paste" class="count" id="count">Paste below</label>
+    <div class="pastebox">
+      <div class="rowlabels" aria-hidden="true"><span>Meta</span><span>Google</span><span>Pinterest</span><span>Applovin</span><span>Snap</span><span>TikTok</span></div>
+      <textarea id="paste" spellcheck="false" wrap="off" autocomplete="off" placeholder="13237.79&#9;13300.10&#9;...&#10;1932.48&#9;1800.00&#9;...&#10;212.81&#9;...&#10;60.79&#9;...&#10;739.81&#9;...&#10;80.08&#9;..."></textarea>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-check">
+    <div class="head"><h2 id="h-check"><span class="step">3</span>Check</h2><span class="recheck"><span class="when" id="when"></span><button class="btn alt small" id="recheck" type="button">Check again</button></span></div>
+    <div id="banner" class="banner idle" aria-live="polite">Waiting for pasted data.</div>
+    <ul class="issues" id="issues"></ul>
+    <div class="scroll" id="tableWrap" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-export">
+    <div class="head"><h2 id="h-export"><span class="step">4</span>Export</h2></div>
+    <div class="exports">
+      <div class="panel">
+        <h3>Saint Daily CSV</h3>
+        <p class="hint">Date, Meta, Google, Pinterest, Applovin, Snap, TikTok. Import this into the Saint Daily ad spend table.</p>
+        <div class="btns"><button class="btn" id="dlDaily" type="button" disabled>Download CSV</button></div>
+        <p class="status" id="stDaily" aria-live="polite"></p>
+      </div>
+      <div class="panel">
+        <h3>Xero manual journals</h3>
+        <p class="hint" id="jSummary">One journal per date. Amounts in your sheet include GST.</p>
+        <div class="btns">
+          <button class="btn" id="dlXlsx" type="button" disabled>Download Excel</button>
+          <button class="btn alt" id="dlXero" type="button" disabled>Download Xero CSV</button>
+        </div>
+        <p class="status" id="stJournal" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="jrn" id="jrn"></div>
+  </section>
+</div>
+
+<script>
+/* ===== LOGIC START (pure, no DOM) ===== */
+const PLATFORMS = [
+  { key: "meta",      label: "Meta",      desc: "facebooksAds", expCode: "263", expName: "Social Media Ads - Meta",      accCode: "402", accName: "Accrued Social Media Ads - Meta",      gst: false },
+  { key: "google",    label: "Google",    desc: "Google Ads",   expCode: "271", expName: "Social Media Ads - Google",    accCode: "405", accName: "Accrued Social Media Ads - Google",    gst: true  },
+  { key: "pinterest", label: "Pinterest", desc: "Pinterest",    expCode: "318", expName: "Social Media Ads - Pinterest", accCode: "398", accName: "Accrued Social Media Ads - Pinterest", gst: false },
+  { key: "applovin",  label: "Applovin",  desc: "Applovin",     expCode: "314", expName: "Social Media Ads - AppLovin",  accCode: "396", accName: "Accrued Social Media Ads - AppLovin",  gst: true  },
+  { key: "snap",      label: "Snap",      desc: "Snapchat",     expCode: "299", expName: "Social Media Ads - Snapchat",  accCode: "399", accName: "Accrued Social Media Ads - Snapchat",  gst: true  },
+  { key: "tiktok",    label: "TikTok",    desc: "Tiktok",       expCode: "319", expName: "Social Media Ads - TikTok",    accCode: "397", accName: "Accrued Social Media Ads - TikTok",    gst: true  },
+];
+const TAX_GST = "GST on Expenses", TAX_NONE = "BAS Excluded";
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MAX_DAYS = 62;
+
+const p2 = n => String(n).padStart(2, "0");
+const isoToDay = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : null; };
+const dayDate = n => new Date(n * 86400000);
+const lbl   = n => { const d = dayDate(n); return d.getUTCDate() + " " + MON[d.getUTCMonth()] + " " + DOW[d.getUTCDay()]; };
+const short = n => { const d = dayDate(n); return d.getUTCDate() + " " + MON[d.getUTCMonth()]; };
+const dot   = n => { const d = dayDate(n); return p2(d.getUTCDate()) + "." + p2(d.getUTCMonth() + 1) + "." + d.getUTCFullYear(); };
+const slash = n => { const d = dayDate(n); return p2(d.getUTCDate()) + "/" + p2(d.getUTCMonth() + 1) + "/" + d.getUTCFullYear(); };
+const iso   = n => { const d = dayDate(n); return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()); };
+const money = c => (c / 100).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const plain = c => (c / 100).toFixed(2);
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+function buildDays(startIso, endIso) {
+  const a = isoToDay(startIso), b = isoToDay(endIso);
+  if (a == null || b == null) return { error: "Pick both a start date and an end date.", fix: "Use the From and To boxes in step 1." };
+  if (b < a) return { error: "The end date is before the start date.", fix: "Swap the two dates, or pick a later end date." };
+  if (b - a + 1 > MAX_DAYS) return { error: "That range is " + (b - a + 1) + " days long.", fix: "Pick " + MAX_DAYS + " days or fewer, for example one month at a time." };
+  const days = [];
+  for (let d = a; d <= b; d++) days.push(d);
+  return { days };
+}
+
+function parseCell(raw) {
+  const t = String(raw).replace(/[ \s]/g, "");
+  if (t === "") return { kind: "empty" };
+  let s = t.replace(/^A?\$/i, "").replace(/,/g, "");
+  let neg = false;
+  const paren = /^\((.*)\)$/.exec(s);
+  if (paren) { s = paren[1]; neg = true; }
+  if (/^-/.test(s)) { s = s.slice(1); neg = true; }
+  s = s.replace(/^A?\$/i, "");
+  if (!/^\d+(\.\d+)?$/.test(s)) return { kind: "text" };
+  const cents = Math.round(parseFloat(s) * 100);
+  return neg && cents !== 0 ? { kind: "neg" } : { kind: "num", cents };
+}
+
+const listOf = (arr, max = 8) => arr.length <= max ? arr.join(", ") : arr.slice(0, max).join(", ") + " and " + (arr.length - max) + " more";
+
+function analyze(days, text) {
+  const lines = String(text).replace(/\r/g, "").split("\n");
+  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop();
+  if (!lines.length) return { empty: true };
+
+  let rows = lines.map(l => l.split("\t"));
+  const errors = [], warnings = [];
+  const n = days.length, P = PLATFORMS.length;
+  const nameRe = /^\s*(meta|facebook|google|pinterest|applovin|snap|snapchat|tiktok|tik tok|total|date)\b/i;
+
+  // row names copied along with the numbers
+  if (rows.filter(r => nameRe.test(r[0] || "")).length >= Math.min(2, rows.length)) {
+    errors.push({ title: "The row names were copied too",
+      why: "First column reads: " + rows.map(r => (r[0] || "").trim()).filter(Boolean).slice(0, 6).join(", ") + ".",
+      fix: "Copy again starting from the first number, without the Meta, Google, Pinterest, Snap and TikTok names." });
+    rows = rows.map(r => r.slice(1));
+  }
+  // a row of dates copied on top
+  const first = rows[0].filter(c => c.trim() !== "");
+  if (first.length && first.every(c => parseCell(c).kind === "text")) {
+    errors.push({ title: "Row 1 looks like dates, not numbers",
+      why: "Found: " + listOf(first, 4) + ".",
+      fix: "Copy again starting from the Meta row, without the date row." });
+    rows.shift();
+    if (!rows.length) return { grid: [], errors, warnings, rows: 0, cols: 0, ok: false };
+  }
+
+  const maxLen = Math.max(...rows.map(r => r.length));
+  const total = Math.max(n, maxLen);
+  const grid = [];
+  for (let c = 0; c < total; c++) {
+    grid.push({ day: c < n ? days[c] : days[0] + c, extra: c >= n,
+      cells: PLATFORMS.map(() => ({ status: "missing", text: "missing", cents: 0 })) });
+  }
+
+  const emptyCells = [], textCells = [], negCells = [];
+  rows.slice(0, P).forEach((r, p) => {
+    r.forEach((raw, c) => {
+      const pc = parseCell(raw), cell = grid[c].cells[p], where = PLATFORMS[p].label + " " + short(grid[c].day);
+      if (pc.kind === "num") { cell.status = "ok"; cell.cents = pc.cents; cell.text = money(pc.cents); }
+      else if (pc.kind === "empty") { cell.status = "bad"; cell.text = "empty"; if (c < n) emptyCells.push(where); }
+      else if (pc.kind === "neg") { cell.status = "bad"; cell.text = raw.trim(); negCells.push(where + " = " + raw.trim()); }
+      else { cell.status = "bad"; cell.text = raw.trim(); textCells.push(where + ' = "' + raw.trim() + '"'); }
+    });
+  });
+
+  // number of rows
+  if (rows.length !== P) {
+    const names = PLATFORMS.map(p => p.label).join(", ");
+    if (rows.length < P) {
+      errors.push({ title: "Pasted " + plural(rows.length, "row") + ", expected " + P,
+        why: "Missing: " + PLATFORMS.slice(rows.length).map(p => p.label).join(", ") + ".",
+        fix: "Select all " + P + " rows (" + names + ") in the sheet before copying." });
+    } else {
+      errors.push({ title: "Pasted " + plural(rows.length, "row") + ", expected " + P,
+        why: plural(rows.length - P, "extra row") + " below TikTok.",
+        fix: "Copy only the " + P + " spend rows. Leave out totals or other rows underneath." });
+    }
+  }
+
+  // number of columns (dates) per row
+  const byLen = {};
+  rows.slice(0, P).forEach((r, p) => { (byLen[r.length] = byLen[r.length] || []).push(PLATFORMS[p].label); });
+  Object.keys(byLen).forEach(k => {
+    const L = +k; if (L === n) return;
+    const who = byLen[k];
+    if (L < n) {
+      errors.push({ title: (who.length === P ? "All rows have " : listOf(who) + (who.length === 1 ? " has " : " have ")) + plural(L, "value") + " but " + plural(n, "date") + " " + (n === 1 ? "is" : "are") + " selected",
+        why: "No numbers for " + listOf(days.slice(L).map(lbl)) + ".",
+        fix: L ? "Copy the missing columns from the sheet and paste again, or move the end date back to " + lbl(days[L - 1]) + " if those days are not ready."
+               : "Paste the numbers for every date." });
+    } else {
+      errors.push({ title: (who.length === P ? "All rows have " : listOf(who) + (who.length === 1 ? " has " : " have ")) + plural(L, "value") + " but only " + plural(n, "date") + " " + (n === 1 ? "is" : "are") + " selected",
+        why: plural(L - n, "extra column") + " after " + lbl(days[n - 1]) + ".",
+        fix: "Move the end date to " + lbl(days[0] + L - 1) + ", or copy only " + plural(n, "column") + " from the sheet." });
+    }
+  });
+
+  if (emptyCells.length) errors.push({ title: plural(emptyCells.length, "empty cell"), why: listOf(emptyCells) + ".",
+    fix: "Type 0 in the sheet for any day with no spend, then copy again." });
+  if (textCells.length) errors.push({ title: plural(textCells.length, "cell") + " with text instead of a number", why: listOf(textCells, 6) + ".",
+    fix: "Only numbers are allowed. Check the sheet for text, or for formulas showing #N/A or #REF!, then copy again." });
+  if (negCells.length) errors.push({ title: plural(negCells.length, "negative amount"), why: listOf(negCells) + ".",
+    fix: "Ad spend cannot be negative here. Correct the value in the sheet, then copy again." });
+
+  grid.forEach(g => {
+    if (!g.extra && g.cells.every(c => c.status === "ok" && c.cents === 0)) {
+      warnings.push({ title: "All values are 0 on " + lbl(g.day), why: "No journal will be created for this date.",
+        fix: "If that is wrong, fix the sheet and paste again." });
+    }
+  });
+
+  return { grid, errors, warnings, rows: rows.length, cols: maxLen, ok: errors.length === 0 };
+}
+
+function buildJournals(days, grid) {
+  const journals = [];
+  grid.forEach((g, i) => {
+    if (g.extra) return;
+    const lines = [];
+    PLATFORMS.forEach((p, k) => {
+      const ac = g.cells[k].cents;
+      if (ac <= 0) return;
+      let d = ac;
+      if (p.gst) {
+        const d0 = Math.round(ac / 1.1);
+        d = [d0, d0 - 1, d0 + 1].find(x => x + Math.round(x / 10) === ac);
+        if (d === undefined) d = d0;
+      }
+      lines.push({ desc: p.desc, code: p.expCode, account: p.expCode + " - " + p.expName, tax: p.gst ? TAX_GST : TAX_NONE, cents: d, gst: ac - d });
+      lines.push({ desc: p.desc, code: p.accCode, account: p.accCode + " - " + p.accName, tax: TAX_NONE, cents: -ac, gst: 0 });
+    });
+    if (!lines.length) return;
+    const sub = lines.filter(l => l.cents > 0).reduce((s, l) => s + l.cents, 0);
+    const gst = lines.filter(l => l.cents > 0).reduce((s, l) => s + l.gst, 0);
+    const cr = -lines.filter(l => l.cents < 0).reduce((s, l) => s + l.cents, 0);
+    journals.push({ day: days[i], narration: "Advertisement as per Triple Whale for " + dot(days[i]), lines, sub, gst, cr, balanced: sub + gst === cr });
+  });
+  return journals;
+}
+
+function csvEsc(v) { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+const csvJoin = rows => rows.map(r => r.map(csvEsc).join(",")).join("\r\n") + "\r\n";
+
+function dailyCsv(days, grid) {
+  const rows = [["Date"].concat(PLATFORMS.map(p => p.label))];
+  grid.forEach((g, i) => { if (!g.extra) rows.push([iso(days[i])].concat(g.cells.map(c => plain(c.cents)))); });
+  return csvJoin(rows);
+}
+function xeroCsv(journals) {
+  const rows = [["*Narration", "*Date", "Description", "*AccountCode", "TaxRate", "*Amount", "TrackingName1", "TrackingOption1", "TrackingName2", "TrackingOption2"]];
+  journals.forEach(j => j.lines.forEach(l => rows.push([j.narration, slash(j.day), l.desc, l.code, l.tax, plain(l.cents), "", "", "", ""])));
+  return csvJoin(rows);
+}
+function journalRows(journals) {
+  const out = [];
+  journals.forEach(j => j.lines.forEach(l => out.push({ Narration: j.narration, Date: slash(j.day), Description: l.desc, Account: l.account, "Tax Rate": l.tax, Amount: l.cents / 100 })));
+  return out;
+}
+/* ===== LOGIC END ===== */
+
+/* ===== UI ===== */
+const $ = id => document.getElementById(id);
+let current = { days: null, res: null, journals: [] };
+
+const dlPromise = (window.claude && window.claude.use)
+  ? window.claude.use("downloads").catch(() => null)
+  : Promise.resolve(null);
+
+async function saveFile(filename, data, mime, statusEl) {
+  const dl = await dlPromise;
+  if (dl) {
+    try { await dl.save({ filename, data }); statusEl.textContent = "Saved " + filename; }
+    catch (e) { statusEl.textContent = e && e.code === "declined" ? "Download cancelled." : "Could not save the file" + (e && e.message ? ": " + e.message : "."); }
+    return;
+  }
+  const blob = new Blob([data], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  statusEl.textContent = "Downloaded " + filename;
+}
+
+function issueHtml(kind, it) {
+  return '<li class="issue ' + kind + '"><b>' + esc(it.title) + '</b><div class="why">' + esc(it.why) + '</div><div class="fix"><em>What to do:</em> ' + esc(it.fix) + "</div></li>";
+}
+
+function renderTable(grid) {
+  const colSums = grid.map(() => 0);
+  let head = "<tr><th>Company</th>" + grid.map(g => "<th" + (g.extra ? ' class="bad"' : "") + ">" + esc(short(g.day)) + (g.extra ? " (extra)" : "") + "</th>").join("") + "<th>Total</th></tr>";
+  let body = "", grand = 0;
+  PLATFORMS.forEach((p, k) => {
+    let rowTotal = 0, rowOk = true;
+    const cells = grid.map((g, c) => {
+      const cell = g.cells[k];
+      if (cell.status === "ok") { colSums[c] += cell.cents; rowTotal += cell.cents; } else rowOk = false;
+      const bad = cell.status !== "ok" || g.extra;
+      return '<td class="' + (bad ? "bad" : "") + '">' + esc(cell.text) + "</td>";
+    }).join("");
+    grand += rowTotal;
+    body += "<tr><td>" + p.label + "</td>" + cells + "<td>" + (rowOk ? money(rowTotal) : "") + "</td></tr>";
+  });
+  const foot = "<tr><td>Total</td>" + colSums.map(v => "<td>" + money(v) + "</td>").join("") + "<td>" + money(grand) + "</td></tr>";
+  return "<table><thead>" + head + "</thead><tbody>" + body + "</tbody><tfoot>" + foot + "</tfoot></table>";
+}
+
+function renderJournals(journals) {
+  return journals.map((j, i) => {
+    const rows = j.lines.map(l => "<tr><td class='desc'>" + esc(l.desc) + "</td><td class='desc'>" + esc(l.account) + "</td><td class='desc'>" + esc(l.tax) + "</td><td>" +
+      (l.cents > 0 ? money(l.cents) : "") + "</td><td>" + (l.cents < 0 ? money(-l.cents) : "") + "</td></tr>").join("");
+    return "<details" + (i === 0 ? " open" : "") + "><summary>" + esc(j.narration) + " &middot; " + money(j.cr) + (j.balanced ? "" : " (does not balance)") + "</summary><div class='scroll'>" +
+      "<table><thead><tr><th>Description</th><th>Account</th><th>Tax rate</th><th>Debit</th><th>Credit</th></tr></thead><tbody>" + rows + "</tbody><tfoot>" +
+      "<tr><td class='desc' colspan='3'>Subtotal</td><td>" + money(j.sub) + "</td><td>" + money(j.cr) + "</td></tr>" +
+      "<tr><td class='desc' colspan='3'>GST 10%</td><td>" + money(j.gst) + "</td><td>0.00</td></tr>" +
+      "<tr><td class='desc' colspan='3'>Total</td><td>" + money(j.sub + j.gst) + "</td><td>" + money(j.cr) + "</td></tr>" +
+      "</tfoot></table></div></details>";
+  }).join("");
+}
+
+function refresh(manual) {
+  ["stDaily", "stJournal"].forEach(id => { $(id).textContent = ""; });
+  const text = $("paste").value;
+  const built = buildDays($("start").value, $("end").value);
+  const banner = $("banner"), issues = $("issues"), wrap = $("tableWrap");
+  let ok = false, res = null, journals = [];
+
+  if (built.error) {
+    $("rangeNote").textContent = "";
+    banner.className = "banner bad"; banner.textContent = "Fix the date range first.";
+    issues.innerHTML = issueHtml("error", { title: built.error, why: "", fix: built.fix });
+    wrap.hidden = true; $("count").textContent = "Paste below";
+    current = { days: null, res: null, journals: [] };
+  } else {
+    const days = built.days;
+    $("rangeNote").innerHTML = "<strong>" + plural(days.length, "day") + "</strong> &middot; " + lbl(days[0]) + " to " + lbl(days[days.length - 1]) + ". Paste " + PLATFORMS.length + " rows by " + plural(days.length, "column") + ".";
+    res = analyze(days, text);
+    if (res.empty) {
+      $("count").textContent = "Expected: " + PLATFORMS.length + " rows by " + plural(days.length, "column");
+      banner.className = "banner idle"; banner.textContent = "Waiting for pasted data.";
+      issues.innerHTML = ""; wrap.hidden = true;
+    } else {
+      $("count").textContent = "Pasted " + res.rows + " rows by " + plural(res.cols, "column") + ". Expected " + PLATFORMS.length + " rows by " + plural(days.length, "column") + ".";
+      ok = res.ok;
+      if (ok) {
+        journals = buildJournals(days, res.grid);
+        banner.className = "banner good";
+        banner.textContent = "All good. " + plural(days.length, "day") + ", " + (days.length * PLATFORMS.length) + " values checked.";
+      } else {
+        banner.className = "banner bad";
+        banner.textContent = plural(res.errors.length, "problem") + " to fix before you can export.";
+      }
+      issues.innerHTML = res.errors.map(e => issueHtml("error", e)).join("") + res.warnings.map(w => issueHtml("warn", w)).join("");
+      wrap.innerHTML = renderTable(res.grid); wrap.hidden = false;
+    }
+    current = { days, res, journals };
+  }
+
+  const now = new Date();
+  $("when").textContent = res && !res.empty && !built.error ? "Checked " + p2(now.getHours()) + ":" + p2(now.getMinutes()) + ":" + p2(now.getSeconds()) : "";
+  $("dlDaily").disabled = !ok;
+  $("dlXlsx").disabled = !ok || !journals.length;
+  $("dlXero").disabled = !ok || !journals.length;
+  $("jrn").innerHTML = ok ? renderJournals(journals) : "";
+  $("jSummary").textContent = ok
+    ? plural(journals.length, "journal") + ", one per date. Amounts in your sheet include GST, so Google, Snap and TikTok are split into ex-GST spend and GST."
+    : "One journal per date. Amounts in your sheet include GST. Fix the problems above to enable export.";
+}
+
+$("dlDaily").addEventListener("click", () => {
+  const { days, res } = current; if (!res || !res.ok) return;
+  saveFile("saint_daily_ad_spend_" + iso(days[0]) + "_to_" + iso(days[days.length - 1]) + ".csv", dailyCsv(days, res.grid), "text/csv", $("stDaily"));
+});
+$("dlXero").addEventListener("click", () => {
+  const { days, journals } = current; if (!journals.length) return;
+  saveFile("xero_manual_journals_" + iso(days[0]) + "_to_" + iso(days[days.length - 1]) + ".csv", xeroCsv(journals), "text/csv", $("stJournal"));
+});
+$("dlXlsx").addEventListener("click", async () => {
+  const { days, journals } = current; if (!journals.length) return;
+  const ws = XLSX.utils.json_to_sheet(journalRows(journals));
+  ws["!cols"] = [{ wch: 48 }, { wch: 12 }, { wch: 16 }, { wch: 44 }, { wch: 16 }, { wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Journal");
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  saveFile("ad_spend_journals_" + iso(days[0]) + "_to_" + iso(days[days.length - 1]) + ".xlsx", buf,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $("stJournal"));
+});
+
+["start", "end"].forEach(id => $(id).addEventListener("input", refresh));
+$("paste").addEventListener("input", refresh);
+// pasting replaces everything already in the box, so old data never lingers
+$("paste").addEventListener("paste", e => {
+  const t = e.clipboardData && e.clipboardData.getData("text");
+  if (t == null) return;
+  e.preventDefault();
+  $("paste").value = t;
+  refresh(true);
+});
+$("recheck").addEventListener("click", () => refresh(true));
+$("clear").addEventListener("click", () => { $("paste").value = ""; refresh(); $("paste").focus(); });
+(function init() {
+  const t = new Date(); const y = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86400000 - 1;
+  $("end").value = iso(y); $("start").value = iso(y - 6);
+  refresh();
+})();
+</script>
+
+</body></html>
