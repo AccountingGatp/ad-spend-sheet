@@ -32,7 +32,7 @@ export async function POST(req) {
     if (layout.error) return NextResponse.json({ error: `${layout.error} Tab checked: "${tab}".` }, { status: 422 });
 
     const items = buildPlan({ layout, values, formulas, tw, tab });
-    return NextResponse.json({ tab, month: layout.month, days, items });
+    return NextResponse.json({ tab, month: layout.month, days, items, tw });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

@@ -2,6 +2,7 @@
 import React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { CHANNELS } from "../lib/plan";
+import { buildJournals, xeroCsv, journalRows, dailyCsv } from "../lib/journal";
 
 const LS_LINK = "adSpendSheetLink";
 const fmt = (n) => n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -74,6 +75,21 @@ export default function Home() {
     setFeeding(false);
   }
 
+  const jr = useMemo(() => (plan?.tw ? buildJournals(plan.days, plan.tw) : null), [plan]);
+  const range = plan ? plan.days[0] + "_to_" + plan.days[plan.days.length - 1] : "";
+  function save(name, data, mime) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: mime }));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  }
+  async function dlXlsx() {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(journalRows(jr.journals));
+    ws["!cols"] = [{ wch: 48 }, { wch: 12 }, { wch: 16 }, { wch: 44 }, { wch: 16 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Journal");
+    save(`ad_spend_journals_${range}.xlsx`, XLSX.write(wb, { bookType: "xlsx", type: "array" }), "application/octet-stream");
+  }
+
   const outside = info && (from < info.first || to > info.last);
   const dates = plan ? plan.days : [];
   const cell = (iso, ch) => plan.items.find((i) => i.iso === iso && i.channel === ch);
@@ -101,7 +117,6 @@ export default function Home() {
           <p className="sub">Triple Whale daily ad spend into your monthly Google Sheet.</p>
         </div>
         <div className="nav">
-          <a href="/journal.html">Journal tool</a>
           <button onClick={async () => { await fetch("/api/logout", { method: "POST" }); window.location.href = "/login"; }}>Sign out</button>
         </div>
       </div>
@@ -168,6 +183,25 @@ export default function Home() {
               {result.skipped?.length > 0 && <> Skipped {result.skipped.length}: {result.skipped.slice(0, 6).map((s) => `${s.a1} (${s.reason})`).join(", ")}.</>}
             </div>
           )}
+        </section>
+      )}
+      {plan && jr && (
+        <section className="card">
+          <h2><span className="step">4</span>Export for {plan.days.length} day{plan.days.length === 1 ? "" : "s"} ({short(plan.days[0])} to {short(plan.days[plan.days.length - 1])})</h2>
+          <p className="sub" style={{ marginTop: 0 }}>Built from the Triple Whale numbers fetched above, for the whole date range, whether or not the sheet was filled.</p>
+          {jr.warnings.length > 0 && <div className="note warn">{jr.warnings.slice(0, 4).join(" ")}{jr.warnings.length > 4 ? ` And ${jr.warnings.length - 4} more.` : ""}</div>}
+          {jr.journals.some((j) => !j.balanced) && <div className="note bad">One or more journals do not balance. Do not import them.</div>}
+          <div className="row">
+            <button className="btn" onClick={() => save(`saint_daily_ad_spend_${range}.csv`, dailyCsv(plan.days, plan.tw), "text/csv")}>Saint Daily CSV</button>
+            <button className="btn" disabled={!jr.journals.length} onClick={() => save(`xero_manual_journals_${range}.csv`, xeroCsv(jr.journals), "text/csv")}>Xero journals CSV</button>
+            <button className="btn" disabled={!jr.journals.length} onClick={dlXlsx}>Xero journals Excel</button>
+          </div>
+          <div className="scroll" style={{ marginTop: 12 }}>
+            <table>
+              <thead><tr><th>Journal</th><th>Spend ex-GST</th><th>GST (820)</th><th>Total</th></tr></thead>
+              <tbody>{jr.journals.map((j) => <tr key={j.day}><td>{j.narration}</td><td>{fmt(j.dr / 100)}</td><td>{fmt(j.gst / 100)}</td><td>{fmt(j.cr / 100)}</td></tr>)}</tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>

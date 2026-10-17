@@ -5,7 +5,7 @@ monthly Google Sheet. It finds each cell by the **date in the "Date" row** and t
 layout and folders stay exactly as they are. It never touches formulas or any other cell.
 
 Every run is two steps: **Fetch** shows a preview (nothing written), then **Feed data to sheet** writes only the cells
-shown. The Journal tool (Xero journals) is included at `/journal.html`.
+shown. After a fetch, step 4 exports the fetched numbers for the whole date range: Saint Daily CSV, Xero journals CSV and Excel.
 
 ## Setup (one time, about 30 minutes)
 
