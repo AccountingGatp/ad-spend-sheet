@@ -189,7 +189,7 @@ export default function Home() {
         <section className="card">
           <h2><span className="step">4</span>Export for {plan.days.length} day{plan.days.length === 1 ? "" : "s"} ({short(plan.days[0])} to {short(plan.days[plan.days.length - 1])})</h2>
           <p className="sub" style={{ marginTop: 0 }}>Built from the Triple Whale numbers fetched above, for the whole date range, whether or not the sheet was filled.</p>
-          {jr.warnings.length > 0 && <div className="note warn">{jr.warnings.slice(0, 4).join(" ")}{jr.warnings.length > 4 ? ` And ${jr.warnings.length - 4} more.` : ""}</div>}
+          {jr.warnings.length > 0 && <div className="note warn">{jr.warnings.join(" ")}</div>}
           {jr.journals.some((j) => !j.balanced) && <div className="note bad">One or more journals do not balance. Do not import them.</div>}
           <div className="row">
             <button className="btn" onClick={() => save(`saint_daily_ad_spend_${range}.csv`, dailyCsv(plan.days, plan.tw), "text/csv")}>Saint Daily CSV</button>
