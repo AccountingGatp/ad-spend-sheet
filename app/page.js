@@ -198,8 +198,8 @@ export default function Home() {
           </div>
           <div className="scroll" style={{ marginTop: 12 }}>
             <table>
-              <thead><tr><th>Journal</th><th>Spend ex-GST</th><th>GST (820)</th><th>Total</th></tr></thead>
-              <tbody>{jr.journals.map((j) => <tr key={j.day}><td>{j.narration}</td><td>{fmt(j.dr / 100)}</td><td>{fmt(j.gst / 100)}</td><td>{fmt(j.cr / 100)}</td></tr>)}</tbody>
+              <thead><tr><th>Journal</th><th>Spend (debit)</th><th>GST (820)</th><th>Total (credit)</th></tr></thead>
+              <tbody>{jr.journals.map((j) => <tr key={j.day}><td>{j.narration}</td><td>{fmt(j.dr / 1000)}</td><td>{fmt(j.gst / 1000)}</td><td>{fmt(j.cr / 1000)}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
